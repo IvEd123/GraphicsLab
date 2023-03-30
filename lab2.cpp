@@ -10,6 +10,8 @@
 #define WIDTH 600
 #define HEIGHT 600
 
+#define MAX_VERTICES 15
+
 #define NUM_OF_ASTEROIDS 10
 #define MAX_NUM_OF_BULLETS 30
 #define BULLET_SPEED 15
@@ -30,13 +32,13 @@ typedef struct{
     float x, y;
 } vec2;
 
-vec2     add   ( vec2 v1,  vec2 v2  ){ return {v1.x + v2.x, v1.y + v2.y}; }
-vec2     sub   ( vec2 v1,  vec2 v2  ){ return {v1.x - v2.x, v1.y - v2.y}; }
-vec2     mult  ( vec2 v,   float k ){ return {v.x * k, v.y * k}; }
-float   dot   ( vec2 v1,  vec2 v2  ){ return  v1.x * v2.x + v1.y * v2.y; }
-float   lensq ( vec2 v            ){ return  dot(v, v); }
-float   len   ( vec2 v            ){ return  sqrt(lensq(v));}
-float   getcos( vec2 v1,  vec2 v2  ){ return  dot(v1, v2) / sqrt(lensq(v1) * lensq(v2));}
+vec2    add    ( vec2 v1,  vec2 v2  ){ return {v1.x + v2.x, v1.y + v2.y}; }
+vec2    sub    ( vec2 v1,  vec2 v2  ){ return {v1.x - v2.x, v1.y - v2.y}; }
+vec2    mult   ( vec2 v,   float k  ){ return {v.x * k, v.y * k}; }
+float   dot    ( vec2 v1,  vec2 v2  ){ return  v1.x * v2.x + v1.y * v2.y; }
+float   lensq  ( vec2 v             ){ return  dot(v, v); }
+float   len    ( vec2 v             ){ return  sqrt(lensq(v));}
+float   getcos ( vec2 v1,  vec2 v2  ){ return  dot(v1, v2) / sqrt(lensq(v1) * lensq(v2));}
 
 void    rotate(vec2* v, float angle){
     const float _cos = cos(angle);
@@ -135,34 +137,34 @@ typedef struct{
     vec3 m1, m2, m3;
 } mat3x3;
 
-vec3 mult (vec3 v, mat3x3 mat){
+vec3 mult (vec3 v, const mat3x3* mat){
     return {
-        dot(v, mat.m1),
-        dot(v, mat.m2), 
-        dot(v, mat.m3)
+        dot(v, mat->m1),
+        dot(v, mat->m2), 
+        dot(v, mat->m3)
     };
 }
 
-mat3x3 create_rotation_matrix(float angle){
+void create_rotation_matrix(mat3x3* p_mat, float angle){
     float _cos =  cos(angle);
     float _sin =  sin(angle);
-    return {
+    *p_mat = {
         {_cos, -_sin, 0},
         {_sin,  _cos, 0},
         {   0,     0, 1}
     };
 }
 
-mat3x3 create_move_matrix(vec2 dir){
-    return {
+void create_move_matrix(mat3x3* p_mat, vec2 dir){
+    *p_mat = {
         {1, 0, dir.x},
         {0, 1, dir.y},
         {0, 0,     1}
     };
 }
 
-mat3x3 create_scale_matrix(vec2 scale){
-    return {
+void create_scale_matrix(mat3x3* p_mat, vec2 scale){
+    *p_mat = {
         {scale.x,       0, 0},
         {      0, scale.y, 0},
         {      0,       0, 1}
@@ -285,9 +287,9 @@ control checkEvents(){
         case 'f':
             ctrl = SMALLER;
             break;
-    //    case 't':
-    //        ctrl = SHOOT;
-    //        break;
+        case 't':
+            ctrl = SHOOT;
+            break;
         default:
             break;
         }
@@ -370,12 +372,12 @@ void drawLine_brez( line l_p){
     }
 }   
 
-/*void draw_screen_borders(){
+void draw_screen_borders(){
     drawLine_brez({{      0,        0 }, {WIDTH-1,        0}});
     drawLine_brez({{WIDTH-1,        0 }, {WIDTH-1, HEIGHT-1}});
     drawLine_brez({{WIDTH-1, HEIGHT-1 }, {      0, HEIGHT-1}});
     drawLine_brez({{      0, HEIGHT-1 }, {      0,        0}});
-}*/
+}
 
 typedef struct {
     vec3 *vertices;
@@ -401,31 +403,36 @@ polygon create_polygon(int num){
 }   
 
 
+mat3x3 m_disp;  
+mat3x3 m_scale; 
+mat3x3 m_rot;   
+vec3 polygon_temp[MAX_VERTICES];
+
 void update_polygon(const polygon* _q){
 
-    mat3x3 disp = create_move_matrix(_q->pos);
-    mat3x3 scale = create_scale_matrix(_q->scale);
-    mat3x3 rot = create_rotation_matrix(_q->rot);
-    vec3 *polygon_temp = (vec3*)malloc(sizeof(vec3) * _q->num_of_vertices);
-    for(int i = 0; i < _q->num_of_vertices; i++){
-        polygon_temp[i] = mult(_q->vertices[i], scale);
-        polygon_temp[i] = mult(polygon_temp[i], rot);
-        polygon_temp[i] = mult(polygon_temp[i], disp);
+    create_move_matrix(&m_disp, _q->pos);
+    create_scale_matrix(&m_scale, _q->scale);
+    create_rotation_matrix(&m_rot,_q->rot);
+    const int n = _q->num_of_vertices;
+    for(int i = 0; i < n; i++){
+        polygon_temp[i] = mult(_q->vertices[i], &m_scale);
+        polygon_temp[i] = mult(polygon_temp[i], &m_rot);
+        polygon_temp[i] = mult(polygon_temp[i], &m_disp);
     }
 
 
-    for(int i = 0; i < _q->num_of_vertices; i++){
+    for(int i = 0; i < n; i++){
         drawLine_brez({
             {polygon_temp[i].x, polygon_temp[i].y},
-            {polygon_temp[(i+1)%_q->num_of_vertices].x,polygon_temp[(i+1)%_q->num_of_vertices].y}
+            {polygon_temp[(i+1)%n].x,polygon_temp[(i+1)%n].y}
         });
     }
     
 }
 
-polygon Q;
+//polygon Q;
 
-/*polygon asteroids[NUM_OF_ASTEROIDS];
+polygon asteroids[NUM_OF_ASTEROIDS];
 polygon spaceship;
 
 int score = 0;
@@ -474,6 +481,7 @@ void update_bullets(){
 void update_asteroids(){
     for(int i = 0; i < NUM_OF_ASTEROIDS; i++){
         asteroids[i].pos = add(asteroids[i].pos, {0, 1});
+        asteroids[i].rot += 0.017;
         if(asteroids[i].pos.y > HEIGHT){
             asteroids[i].pos.y = -20;
             score -= 5;
@@ -490,7 +498,7 @@ void update_asteroids(){
 
         }
     }
-}*/
+}
 
 void control_polygon(polygon* _q, control ctrl){
     switch (ctrl){
@@ -518,8 +526,8 @@ void control_polygon(polygon* _q, control ctrl){
     case ROTATE_COUNTERCLOCKWISE:
         _q->rot -= 0.34;
         break;
-//    case SHOOT:
-//       shoot();
+    case SHOOT:
+       shoot();
     default:
         break;
     }
@@ -527,21 +535,21 @@ void control_polygon(polygon* _q, control ctrl){
 
 
 void Update(){
-    //draw_screen_borders();
-    update_polygon(&Q);
-    //update_bullets();
-    //update_asteroids();
-
-    //char str_score[20];
-    //sprintf(str_score, "score: %d\0", score);
-    //XDrawString(X_INFO, 500, 10, str_score, strlen(str_score));
+    draw_screen_borders();
+    update_polygon(&spaceship);
+    update_bullets();
+    update_asteroids();
+   
+    char str_score[20];
+    sprintf(str_score, "score: %d\0", score);
+    XDrawString(X_INFO, 500, 10, str_score, strlen(str_score));
 }
 
 int main(){
     init_x();
     srand(time(NULL));
 
-    unsigned char num_of_vertices;
+   /* unsigned char num_of_vertices;
     printf("Enter num of vertices: ");
     scanf("%d", &num_of_vertices);
     
@@ -555,9 +563,9 @@ int main(){
         XClearWindow(X_info.dis, X_info.win); 
         control_polygon(&Q, ctrl);
         Update();
-    }
+    }*/
 
-    /*spaceship = create_polygon(3);
+    spaceship = create_polygon(3);
     spaceship.pos = {WIDTH/2, HEIGHT-100};
     spaceship.rot = -1.52;
     spaceship.scale = {20, 5};  
@@ -566,8 +574,8 @@ int main(){
     for(int i = 0; i < NUM_OF_ASTEROIDS; i++){
         asteroids[i] = create_polygon(6);
         asteroids[i].pos = {float(rand()%WIDTH), -i*50.f};
-        asteroids[i].rot = i;
-        asteroids[i].scale = {10, 10};  
+        asteroids[i].rot = i / 10.f;
+        asteroids[i].scale = {15.f - i, 10.f + i};  
     }
 
     while(1){
@@ -575,7 +583,7 @@ int main(){
         XClearWindow(X_info.dis, X_info.win); 
         control_polygon(&spaceship, ctrl);
         Update();
-    }*/
+    }
 
 
     close_x();
